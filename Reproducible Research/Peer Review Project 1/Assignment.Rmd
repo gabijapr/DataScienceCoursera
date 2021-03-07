@@ -1,0 +1,160 @@
+---
+title: "Activity monitoring"
+output:
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data processing and setup
+
+First of all, we will read the data into R which was provided in the forked repository [retrieved 2020 07 12].
+Data can be found at https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip.
+```{r reading, cache=TRUE}
+     data<-read.csv(unz("activity.zip", "activity.csv"), na.strings = "NA")       
+```
+
+Next, we will load the packages that will be used for analysis:
+
+```{r package, message=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+
+## Data Analysis & Results
+  
+### Steps taken per day
+
+First of all, we will create a data frame, that finds the sum of steps taken each day
+
+```{r stepday, message=FALSE}
+stepday <- data %>% group_by(date = as.factor(date)) %>% 
+        summarize(stepsum = sum(steps, na.rm=T))
+
+head(stepday)
+```
+
+Histogram of the total number of steps taken each day:
+
+```{r histogram}
+hist(stepday$stepsum, breaks=8, xlab="Steps", 
+     main="Histogram of Steps Per Day", col="azure")
+```
+
+Here is the mean and median of steps taken per day
+
+```{r meanmedian}
+data.frame(Mean = mean(stepday$stepsum), Median = median(stepday$stepsum))
+```
+
+### Average dayly activity pattern
+
+First, we will group the data by intervals and take the average of each interval:
+
+```{r avgstep, message=FALSE}
+avgstep <- data %>% group_by(interval) %>% summarize (average = mean(steps, na.rm=T))
+
+head(avgstep)
+```
+
+Next, we will plot the this average over each interval:
+
+```{r avgstepplot}
+ggplot(data = avgstep, aes(interval, average)) + 
+        geom_line(colour="blue") + 
+        labs(title="Average Steps", subtitle ="In Interval Time")
+```
+
+The interval that has the highest step average is `r avgstep[which(avgstep$average == max(avgstep$average)), "interval"]`
+
+### Imputing missing values
+
+Total number of rows with NA's is `r length(!complete.cases(data))`
+
+For each missing case, we used the mean for that 5-minute interval to fill in the missing data:
+
+```{r filldata}
+fill<-data
+for (i in seq_along(fill$steps))
+{
+      if(is.na(fill$steps[i]))
+        {
+                fill$steps[i]<-as.numeric(avgstep[which(fill$interval[i] ==
+                avgstep$interval),"average"])
+        }
+}
+```
+
+A new data frame was created to group the filled data by dates and calculate the sum over each day:
+
+```{r stepday2, message=FALSE}
+stepday2 <- fill %>% group_by(date = as.factor(date)) %>% 
+        summarize(stepsum = sum(as.numeric(steps)))
+```
+
+For a better comparison, two graphs were drawn (the first one - with NA, the second - without)
+
+```{r histogram2}
+par(mfrow=c(1,2))
+
+hist(stepday$stepsum, breaks=8, xlab="Steps", 
+     main="Histogram of Steps Per Day", col="azure")
+
+hist(stepday2$stepsum, breaks = 8, xlab="Steps", 
+     main="Histogram of Steps Per Day (No NA)", col="azure")
+
+par(mfrow=c(1,1))
+```
+
+The mean and median with the missing values filled in:
+
+```{r meanmed2}
+data.frame(Mean = c(mean(stepday$stepsum), mean(stepday2$stepsum)), 
+           Median = c(median(stepday$stepsum),median(stepday2$stepsum)),
+           row.names=c("with NA", "no NA"))
+```
+
+### Weekdays and Weekends
+
+#### Dividing days into weekdays and weekends
+
+Firstly, the character variable "date" of the dataset was converted into the R date variable.
+
+```{r replace1}
+fill$date <- as.Date(fill$date, "%Y-%m-%d")
+```
+
+Secondly, a new variable was introduced into the dataset, giving all the row values the name "Weekday":
+
+```{r replace2}
+fill$Day <- "Weekday"
+```
+
+Lastly, using the weekdays() function, the weekend values were replaced to have the name "Weekend"
+
+```{r replace3}
+fill$Day <- as.factor(replace(fill$Day, which(weekdays(fill$date) == 
+            "Saturday" | weekdays(fill$date) == "Sunday"), "Weekend"))
+```
+
+#### Differences
+
+The new data vas summarized by taking the interval means.
+```{r avgstepw, message=FALSE}
+avgstepw <- fill %>% group_by(interval, Day) %>% 
+        summarize (average = mean(as.numeric(steps)))
+```
+
+A graph was plotted, subseting the data over Weekdays and Weekends
+```{r avgstepwplot}
+ggplot(data = avgstepw, aes(interval, average,colour = Day)) + 
+        geom_line(show.legend=F) +
+        facet_grid(Day~.) +
+        labs(title="Average Step count for each time interval during weekdays and weekends")
+```
+
+As we can see, the activity during the weekdays and weekends seems to be similar. The movement during the weekends is more consistent, whereas during the weekdays there is a spike of movement in the ~850th interval.

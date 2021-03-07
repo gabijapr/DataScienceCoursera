@@ -1,0 +1,102 @@
+---
+title: "Summary of Weather Damage in US"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsnis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+For this reason, the project tries to answer the question **which types of events cause the most damage**. To conduct the analysis, we used the Administration's (NOAA) storm database - it tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+We found that tornadoes cause the most damage in terms of both human health and economic consequences. The loss caused by this event type seems to be much more significant than any other natural disasters. Thus, cautionary measures should taken explicitly for this type of event to prevent further destruction. 
+
+## Data proccessing
+
+First of all, we have downloaded the data from the NOAA website [retrieved 2020-07-12]. We have named the file comma seperated value document "data.csv.bz2".
+
+```{r download, cache=TRUE}
+Url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file(Url, destfile="data.csv.bz2")
+```
+
+Next, we have read the data into R with the $read.csv$ function. Since the variable "EVTYPE" (event type) is a character variable, we factored it.
+
+```{r reading, cache=TRUE}
+data<-read.csv("data.csv.bz2")           
+data$EVTYPE<-factor(data$EVTYPE)
+```
+
+To figure out, which events caused more damage in terms of casualties and injuries, we used the $dplyr$ package.
+
+```{r, message=FALSE}
+library(dplyr)
+```
+
+We made a new data frame called $health$ that has four variables:  
+* EVTYPE - event type
+* loss - Total human loss for that event (casualties + injuries)
+* deaths - the total of deaths for that event
+* injuries - the total of injuries for that event
+
+```{r human, message=FALSE}
+health <- data %>% group_by(EVTYPE) %>% summarize(loss=sum(FATALITIES)+sum(INJURIES), fatalities=sum(FATALITIES), injuries=sum(INJURIES))
+```
+
+We arrange the data in descending order and create a new dataset, $hloss$ (human loss), containing the first five elements in terms of the biggest $loss$
+
+```{r human2}
+health <- arrange(health, desc(loss))
+hloss <- head(health, n=5)
+```
+
+We repeated the same algorithm for the economical consequences, but instead we calculated the sum of damage caused in property (PROPDMG), crops (CROPDMG), as well as their sum (loss):
+
+```{r economy, message=FALSE}
+dmg <- data %>% group_by(EVTYPE) %>% summarize(loss=(sum(PROPDMG)*+sum(CROPDMG)), PROPDMG=sum(PROPDMG), CROPDMG=sum(CROPDMG))
+
+dmg <- arrange(dmg, desc(loss))
+dloss <- head(dmg, n=5)
+```
+
+## Results
+
+We can visually see the damages caused in both economy and human loss. For that we will use the ggplot2 package.
+
+```{r}
+library(ggplot2)
+```
+
+The plots:
+
+```{r humanplot, fig.width=7}
+ggplot(hloss)+
+        geom_point(aes(EVTYPE, fatalities, color="Fatalities"))+
+        geom_point(aes(EVTYPE,injuries, color="Injuries"))+
+        labs(title = "Figure 1. Impact on health by EVTYPE", subtitle = "Injuries + Deaths", y="Impacted people")
+```
+
+```{r ecoplot, fig.width=7}
+ggplot(dloss, aes(EVTYPE,loss))+
+        geom_point(aes(EVTYPE, PROPDMG, color="Property Loss"))+
+        geom_point(aes(EVTYPE,CROPDMG, color="Crop Loss"))+
+        labs(title = "Figure 2. Impact on Economy by EVTYPE", y="Damage in $")
+```
+
+as we can see, the impact of tornadoes is much larger than any other type of event.
+
+Numeric results for human loss:
+```{r}
+print(hloss)
+```
+
+Numeric results for economy loss:
+```{r}
+print(dloss)
+```
+
+
